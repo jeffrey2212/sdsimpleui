@@ -10,7 +10,13 @@ declare module 'ollama' {
 
   export interface ChatOptions {
     model: string
-    messages: ChatMessage[]
+    messages: Array<{ role: string; content: string }>
+    stream?: boolean
+    options?: {
+      temperature?: number
+      top_p?: number
+      [key: string]: any
+    }
   }
 
   export interface ChatResponse {
@@ -37,9 +43,26 @@ declare module 'ollama' {
     done: boolean
   }
 
+  export interface ListResponse {
+    models: Array<{
+      name: string
+      modified_at: string
+      size: number
+      digest: string
+      details: {
+        format: string
+        family: string
+        families: string[]
+        parameter_size: string
+        quantization_level: string
+      }
+    }>
+  }
+
   export class Ollama {
     constructor(options?: OllamaOptions)
     chat(options: ChatOptions): Promise<ChatResponse>
     generate(options: GenerateOptions): Promise<GenerateResponse>
+    list(): Promise<ListResponse>
   }
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { Ollama } from "ollama"
+import { ollama } from "@/lib/ollama-client"
 
 interface GenerateOptionsRequest {
   category: string
@@ -11,15 +11,10 @@ interface GenerateOptionsRequest {
 export async function POST(request: NextRequest) {
   try {
     console.log("=== Starting generate-options request ===")
-    const ollamaUrl = process.env.OLLAMA_URL || "http://127.0.0.1:11434"
-    console.log("OLLAMA_URL:", ollamaUrl)
-
+    
     const body: GenerateOptionsRequest = await request.json()
     const { category, previousOptions, isReroll, model } = body
     console.log("Request body:", { category, previousOptions, isReroll, model })
-
-    // Initialize Ollama client
-    const ollama = new Ollama({ host: ollamaUrl })
 
     // Construct the prompt
     const prompt = `Generate 6 single-word options for a text-to-image prompt builder.
@@ -40,7 +35,7 @@ Return ONLY a JSON array with this exact format, no other text:
 
     console.log("Generated prompt:", prompt)
 
-    // Use generate method instead of chat
+    // Use generate method
     const response = await ollama.generate({
       model: model || "llama2",
       prompt: prompt,

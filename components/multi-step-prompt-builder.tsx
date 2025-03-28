@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, Sparkles, RefreshCw, ArrowLeft, ArrowRight, Check, Wand2, Edit, Zap } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import Image from "next/image"
-import GenerationOptions from "./generation-options"
+import GenerationOptions, { GenerationOptions as GenerationOptionsType } from "./generation-options"
 
 // Define the steps in our prompt building process
 const STEPS = [
@@ -241,7 +241,7 @@ export default function MultiStepPromptBuilder() {
   }
 
   // Handle options change from the GenerationOptions component
-  const handleOptionsChange = useCallback((options) => {
+  const handleOptionsChange = useCallback((options: GenerationOptionsType) => {
     setGenerationOptions(options)
   }, [])
 
@@ -638,4 +638,3 @@ export default function MultiStepPromptBuilder() {
     </div>
   )
 }
-

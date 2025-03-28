@@ -1,64 +1,99 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Settings, Check, AlertCircle, X } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Loader2, Settings, Check, AlertCircle } from "lucide-react"
 
-interface OllamaModel {
-  name: string
-  details: {
-    parameter_size: string
-    family: string
-  }
+export interface GenerationOptions {
+  llmModel: string
+  promptTemplate: string
+  imageModel: string
+}
+
+const defaultOptions: GenerationOptions = {
+  llmModel: "gemma3:latest",
+  promptTemplate: "illustrious",
+  imageModel: "sdxl"
 }
 
 interface GenerationOptionsProps {
-  onOptionsChange: (options: {
-    llmModel: string
-    promptTemplate: string
-    imageModel: string
-  }) => void
+  onOptionsChange: (options: GenerationOptions) => void
+  selectedOptions?: GenerationOptions
 }
 
-export default function GenerationOptions({ onOptionsChange }: GenerationOptionsProps) {
-  const [llmModels, setLlmModels] = useState<OllamaModel[]>([])
+export default function GenerationOptions({ 
+  onOptionsChange, 
+  selectedOptions = defaultOptions 
+}: GenerationOptionsProps) {
+  const [models, setModels] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isConfigOpen, setIsConfigOpen] = useState(false)
-  const configRef = useRef<HTMLDivElement>(null)
-  const buttonRef = useRef<HTMLButtonElement>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
 
-  const [selectedLlmModel, setSelectedLlmModel] = useState("deepseek-r1:1.5b")
-  const [selectedPromptTemplate, setSelectedPromptTemplate] = useState("illustrious")
-  const [selectedImageModel, setSelectedImageModel] = useState("sdxl")
+  const [selectedLlmModel, setSelectedLlmModel] = useState(selectedOptions.llmModel)
+  const [selectedPromptTemplate, setSelectedPromptTemplate] = useState(selectedOptions.promptTemplate)
+  const [selectedImageModel, setSelectedImageModel] = useState(selectedOptions.imageModel)
 
   // Server status states
   const [llmServerStatus, setLlmServerStatus] = useState<"online" | "offline" | "checking">("checking")
   const [comfyServerStatus, setComfyServerStatus] = useState<"online" | "offline" | "checking">("checking")
 
-  // Handle click outside to close config panel
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        configRef.current &&
-        !configRef.current.contains(event.target as Node) &&
-        buttonRef.current &&
-        !buttonRef.current.contains(event.target as Node)
-      ) {
-        setIsConfigOpen(false)
-      }
-    }
+  // Local state for options with explicit default
+  const [localOptions, setLocalOptions] = useState<GenerationOptions>(() => ({
+    llmModel: selectedOptions.llmModel || defaultOptions.llmModel,
+    promptTemplate: selectedOptions.promptTemplate || defaultOptions.promptTemplate,
+    imageModel: selectedOptions.imageModel || defaultOptions.imageModel
+  }))
 
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
+  // Debug logging for initial state
+  useEffect(() => {
+    console.log('[GenerationOptions] Initial state:', {
+      selectedOptions,
+      localOptions,
+      models,
+      llmServerStatus
+    })
   }, [])
 
-  // Check server status
+  // Update local state when props change
+  useEffect(() => {
+    console.log('[GenerationOptions] Props changed:', selectedOptions)
+    setLocalOptions(selectedOptions)
+  }, [selectedOptions])
+
+  // Store current selections in localStorage
+  useEffect(() => {
+    if (localOptions) {
+      localStorage.setItem('generationOptions', JSON.stringify({
+        model: localOptions.llmModel,
+        promptTemplate: localOptions.promptTemplate,
+        imageModel: localOptions.imageModel
+      }))
+    }
+  }, [localOptions])
+
+  // Load saved values on mount
+  useEffect(() => {
+    const savedOptions = localStorage.getItem('generationOptions')
+    if (savedOptions) {
+      try {
+        const options = JSON.parse(savedOptions)
+        onOptionsChange({
+          llmModel: options.model || "gemma3:latest",
+          promptTemplate: options.promptTemplate || "illustrious",
+          imageModel: options.imageModel || "sdxl"
+        })
+      } catch (error) {
+        console.error('Error loading saved options:', error)
+      }
+    }
+  }, [onOptionsChange])
+
+  // Fetch server status
   useEffect(() => {
     const checkServerStatus = async () => {
       try {
@@ -96,7 +131,7 @@ export default function GenerationOptions({ onOptionsChange }: GenerationOptions
         }
 
         const data = await response.json()
-        setLlmModels(data.models)
+        setModels(data.models)
       } catch (err) {
         console.error("Error fetching models:", err)
         setError(err instanceof Error ? err.message : "Unknown error")
@@ -105,17 +140,21 @@ export default function GenerationOptions({ onOptionsChange }: GenerationOptions
       }
     }
 
+    if (llmServerStatus === "online") {
     fetchModels()
-  }, [])
+    }
+  }, [llmServerStatus])
 
-  // Notify parent component when options change
-  useEffect(() => {
-    onOptionsChange({
-      llmModel: selectedLlmModel,
-      promptTemplate: selectedPromptTemplate,
-      imageModel: selectedImageModel,
-    })
-  }, [selectedLlmModel, selectedPromptTemplate, selectedImageModel, onOptionsChange])
+  const handleOptionChange = (key: keyof GenerationOptions, value: string) => {
+    console.log(`[GenerationOptions] handleOptionChange called - ${key}:`, value)
+    const newOptions = { 
+      ...localOptions, 
+      [key]: value 
+    }
+    console.log('[GenerationOptions] Setting new options:', newOptions)
+    setLocalOptions(newOptions)
+    onOptionsChange(newOptions)
+  }
 
   return (
     <div className="bg-gemini-card border border-gemini-border rounded-2xl shadow-gemini mb-5">
@@ -169,135 +208,145 @@ export default function GenerationOptions({ onOptionsChange }: GenerationOptions
             </Badge>
           </div>
 
-          {/* Custom Configuration Button and Panel */}
-          <div className="relative">
-            <Button
-              ref={buttonRef}
-              variant="gemini-outline"
-              size="sm"
-              className="rounded-xl h-8 text-xs flex items-center gap-1.5"
-              onClick={() => setIsConfigOpen(!isConfigOpen)}
-            >
-              Configure
-              <Settings className="h-3.5 w-3.5 ml-1" />
-            </Button>
-
-            {isConfigOpen && (
-              <div
-                ref={configRef}
-                className="absolute right-0 top-full mt-2 w-[300px] bg-gemini-card border border-gemini-border rounded-xl shadow-lg p-4 z-50"
+          {/* Dialog-based Configuration */}
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="gemini-outline"
+                size="sm"
+                className="rounded-xl h-8 text-xs flex items-center gap-1.5"
+                onClick={() => setDialogOpen(true)}
               >
-                <div className="flex justify-between items-center mb-3">
-                  <h4 className="text-sm font-medium text-gemini-text">Generation Settings</h4>
-                  <button
-                    onClick={() => setIsConfigOpen(false)}
-                    className="text-gemini-text-secondary hover:text-gemini-text"
+                Configure
+                <Settings className="h-3.5 w-3.5 ml-1" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-gemini-card border-gemini-border">
+              <DialogHeader>
+                <DialogTitle className="text-gemini-text">Generation Settings</DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4 mt-2">
+                {/* LLM Model Selection */}
+                <div className="space-y-2">
+                  <label htmlFor="llm-model" className="text-xs font-medium text-gemini-text-secondary block">
+                    LLM Model
+                  </label>
+                  <Select
+                    value={selectedLlmModel}
+                    onValueChange={(value) => {
+                      setSelectedLlmModel(value);
+                      handleOptionChange('llmModel', value);
+                    }}
+                    disabled={loading || models.length === 0}
                   >
-                    <X className="h-4 w-4" />
-                  </button>
+                    <SelectTrigger
+                      id="llm-model"
+                      className="bg-gemini-input border-gemini-border h-8 text-xs transition-colors hover:border-gemini-blue/50 focus:border-gemini-blue"
+                    >
+                      {loading ? (
+                        <div className="flex items-center">
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          <span>Loading...</span>
+                        </div>
+                      ) : (
+                        <SelectValue placeholder="Select LLM model" />
+                      )}
+                    </SelectTrigger>
+                    <SelectContent className="bg-gemini-card border-gemini-border">
+                      {error ? (
+                        <div className="p-2 text-xs text-red-500">{error}</div>
+                      ) : (
+                        <>
+                          <SelectItem value="deepseek-r1:1.5b" className="text-gemini-text text-xs">
+                            deepseek-r1:1.5b (1.5B)
+                          </SelectItem>
+                          {models.map((modelName) => (
+                            <SelectItem key={modelName} value={modelName} className="text-gemini-text text-xs">
+                              {modelName}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                <div className="space-y-4">
-                  {/* LLM Model Selection */}
-                  <div className="space-y-2">
-                    <label htmlFor="llm-model" className="text-xs font-medium text-gemini-text-secondary block">
-                      LLM Model
-                    </label>
-                    <Select
-                      value={selectedLlmModel}
-                      onValueChange={setSelectedLlmModel}
-                      disabled={loading || llmModels.length === 0}
+                {/* Prompt Template Selection */}
+                <div className="space-y-2">
+                  <label htmlFor="prompt-template" className="text-xs font-medium text-gemini-text-secondary block">
+                    Prompt Template
+                  </label>
+                  <Select 
+                    value={selectedPromptTemplate} 
+                    onValueChange={(value) => {
+                      setSelectedPromptTemplate(value);
+                      handleOptionChange('promptTemplate', value);
+                    }}
+                  >
+                    <SelectTrigger
+                      id="prompt-template"
+                      className="bg-gemini-input border-gemini-border h-8 text-xs transition-colors hover:border-gemini-blue/50 focus:border-gemini-blue"
                     >
-                      <SelectTrigger
-                        id="llm-model"
-                        className="bg-gemini-input border-gemini-border h-8 text-xs transition-colors hover:border-gemini-blue/50 focus:border-gemini-blue"
-                      >
-                        {loading ? (
-                          <div className="flex items-center">
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                            <span>Loading...</span>
-                          </div>
-                        ) : (
-                          <SelectValue placeholder="Select LLM model" />
-                        )}
-                      </SelectTrigger>
-                      <SelectContent className="bg-gemini-card border-gemini-border">
-                        {error ? (
-                          <div className="p-2 text-xs text-red-500">{error}</div>
-                        ) : (
-                          <>
-                            <SelectItem value="deepseek-r1:1.5b" className="text-gemini-text text-xs">
-                              deepseek-r1:1.5b (1.5B)
-                            </SelectItem>
-                            {llmModels.map((model) => (
-                              <SelectItem key={model.name} value={model.name} className="text-gemini-text text-xs">
-                                {model.name} ({model.details.parameter_size})
-                              </SelectItem>
-                            ))}
-                          </>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                      <SelectValue placeholder="Select prompt template" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gemini-card border-gemini-border">
+                      <SelectItem value="illustrious" className="text-gemini-text text-xs">
+                        Illustrious
+                      </SelectItem>
+                      <SelectItem value="flux-1d" className="text-gemini-text text-xs">
+                        Flux.1 D
+                      </SelectItem>
+                      <SelectItem value="pony" className="text-gemini-text text-xs">
+                        Pony
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                  {/* Prompt Template Selection */}
-                  <div className="space-y-2">
-                    <label htmlFor="prompt-template" className="text-xs font-medium text-gemini-text-secondary block">
-                      Prompt Template
-                    </label>
-                    <Select value={selectedPromptTemplate} onValueChange={setSelectedPromptTemplate}>
-                      <SelectTrigger
-                        id="prompt-template"
-                        className="bg-gemini-input border-gemini-border h-8 text-xs transition-colors hover:border-gemini-blue/50 focus:border-gemini-blue"
-                      >
-                        <SelectValue placeholder="Select prompt template" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-gemini-card border-gemini-border">
-                        <SelectItem value="illustrious" className="text-gemini-text text-xs">
-                          Illustrious
-                        </SelectItem>
-                        <SelectItem value="flux-1d" className="text-gemini-text text-xs">
-                          Flux.1 D
-                        </SelectItem>
-                        <SelectItem value="pony" className="text-gemini-text text-xs">
-                          Pony
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                {/* Image Model Selection */}
+                <div className="space-y-2">
+                  <label htmlFor="image-model" className="text-xs font-medium text-gemini-text-secondary block">
+                    Image Model
+                  </label>
+                  <Select 
+                    value={selectedImageModel} 
+                    onValueChange={(value) => {
+                      setSelectedImageModel(value);
+                      handleOptionChange('imageModel', value);
+                    }}
+                  >
+                    <SelectTrigger
+                      id="image-model"
+                      className="bg-gemini-input border-gemini-border h-8 text-xs transition-colors hover:border-gemini-blue/50 focus:border-gemini-blue"
+                    >
+                      <SelectValue placeholder="Select image model" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gemini-card border-gemini-border">
+                      <SelectItem value="sdxl" className="text-gemini-text text-xs">
+                        Stable Diffusion XL
+                      </SelectItem>
+                      <SelectItem value="sd3" className="text-gemini-text text-xs">
+                        Stable Diffusion 3
+                      </SelectItem>
+                      <SelectItem value="dalle3" className="text-gemini-text text-xs">
+                        DALL-E 3
+                      </SelectItem>
+                      <SelectItem value="midjourney" className="text-gemini-text text-xs">
+                        Midjourney
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                  {/* Image Model Selection */}
-                  <div className="space-y-2">
-                    <label htmlFor="image-model" className="text-xs font-medium text-gemini-text-secondary block">
-                      Image Model
-                    </label>
-                    <Select value={selectedImageModel} onValueChange={setSelectedImageModel}>
-                      <SelectTrigger
-                        id="image-model"
-                        className="bg-gemini-input border-gemini-border h-8 text-xs transition-colors hover:border-gemini-blue/50 focus:border-gemini-blue"
-                      >
-                        <SelectValue placeholder="Select image model" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-gemini-card border-gemini-border">
-                        <SelectItem value="sdxl" className="text-gemini-text text-xs">
-                          Stable Diffusion XL
-                        </SelectItem>
-                        <SelectItem value="sd3" className="text-gemini-text text-xs">
-                          Stable Diffusion 3
-                        </SelectItem>
-                        <SelectItem value="dalle3" className="text-gemini-text text-xs">
-                          DALL-E 3
-                        </SelectItem>
-                        <SelectItem value="midjourney" className="text-gemini-text text-xs">
-                          Midjourney
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="pt-2">
+                  <Button variant="gemini" className="w-full rounded-xl" onClick={() => setDialogOpen(false)}>
+                    Apply Settings
+                  </Button>
                 </div>
               </div>
-            )}
-          </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -326,4 +375,3 @@ export default function GenerationOptions({ onOptionsChange }: GenerationOptions
     </div>
   )
 }
-

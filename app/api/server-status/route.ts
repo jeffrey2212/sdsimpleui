@@ -1,23 +1,38 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 
 // This is a mock API endpoint to check server status
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // Simulate checking server status
-    // In a real implementation, you would check if your servers are running
-
-    // For demo purposes, we'll return random status with a bias toward online
-    const llmServerStatus = Math.random() > 0.2 ? "online" : "offline"
-    const comfyServerStatus = Math.random() > 0.2 ? "online" : "offline"
+    // Check Ollama server status directly
+    const ollamaUrl = process.env.OLLAMA_URL || "http://jeffaiserver:11434"
+    console.log("Checking Ollama status at:", ollamaUrl)
+    
+    let ollamaStatus = "offline"
+    let ollamaError = null
+    
+    try {
+      const ollamaResponse = await fetch(ollamaUrl)
+      ollamaStatus = ollamaResponse.ok ? "online" : "offline"
+    } catch (error) {
+      console.error("Ollama connection error:", error)
+      ollamaError = error instanceof Error ? error.message : "Unknown error"
+    }
+    
+    // Mock ComfyUI status for now
+    const comfyUIStatus = Math.random() > 0.2 ? "online" : "offline"
 
     return NextResponse.json({
-      llmServer: llmServerStatus,
-      comfyServer: comfyServerStatus,
+      llmServer: ollamaStatus,
+      comfyServer: comfyUIStatus,
+      error: ollamaError,
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
     console.error("Error checking server status:", error)
-    return NextResponse.json({ error: "Failed to check server status" }, { status: 500 })
+    return NextResponse.json({
+      llmServer: "offline",
+      comfyServer: "offline",
+      error: error instanceof Error ? error.message : "Unknown error"
+    }, { status: 500 })
   }
 }
-
