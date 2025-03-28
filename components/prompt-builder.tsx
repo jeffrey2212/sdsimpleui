@@ -1,17 +1,18 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { Loader2, Sparkles, X, RefreshCw, Wand2, Plus } from "lucide-react"
+import { Loader2, Sparkles, X, RefreshCw, Wand2, Plus, ChevronLeft, ChevronRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import Image from "next/image"
 import { generateOptionsForCategory, enhancePrompt } from "@/lib/prompt-utils"
 import type { CategoryOption, Keyword } from "@/lib/types"
+// Replace the import for OptionsSection
+import OptionsSection from "@/components/options-section-debug"
 
 // Primary categories
 const primaryCategories = [
@@ -40,6 +41,69 @@ export default function PromptBuilder() {
   const [enhancedPrompt, setEnhancedPrompt] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedImage, setGeneratedImage] = useState("")
+  const [generationOptions, setGenerationOptions] = useState({
+    llmModel: "",
+    promptTemplate: "illustrious",
+    imageModel: "",
+  })
+
+  // Refs for category tabs scrolling
+  const tabsContainerRef = useRef<HTMLDivElement>(null)
+  const [showLeftScroll, setShowLeftScroll] = useState(false)
+  const [showRightScroll, setShowRightScroll] = useState(true)
+
+  // Check if tabs need scroll buttons
+  const checkScrollButtons = useCallback(() => {
+    if (tabsContainerRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = tabsContainerRef.current
+      setShowLeftScroll(scrollLeft > 0)
+      setShowRightScroll(scrollLeft < scrollWidth - clientWidth - 10)
+    }
+  }, [])
+
+  // Scroll tabs left or right
+  const scrollTabs = useCallback(
+    (direction: "left" | "right") => {
+      if (tabsContainerRef.current) {
+        const scrollAmount = 200
+        const newScrollLeft =
+          direction === "left"
+            ? tabsContainerRef.current.scrollLeft - scrollAmount
+            : tabsContainerRef.current.scrollLeft + scrollAmount
+
+        tabsContainerRef.current.scrollTo({
+          left: newScrollLeft,
+          behavior: "smooth",
+        })
+
+        // Update scroll buttons after scrolling
+        setTimeout(checkScrollButtons, 300)
+      }
+    },
+    [checkScrollButtons],
+  )
+
+  // Add scroll event listener to tabs container
+  useEffect(() => {
+    const tabsContainer = tabsContainerRef.current
+    if (tabsContainer) {
+      tabsContainer.addEventListener("scroll", checkScrollButtons)
+      // Initial check
+      checkScrollButtons()
+
+      return () => {
+        tabsContainer.removeEventListener("scroll", checkScrollButtons)
+      }
+    }
+  }, [checkScrollButtons])
+
+  // Check scroll buttons on window resize
+  useEffect(() => {
+    window.addEventListener("resize", checkScrollButtons)
+    return () => {
+      window.removeEventListener("resize", checkScrollButtons)
+    }
+  }, [checkScrollButtons])
 
   // Load options when category changes
   useEffect(() => {
@@ -120,7 +184,10 @@ export default function PromptBuilder() {
       const response = await fetch("/api/generate-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: enhancedPrompt }),
+        body: JSON.stringify({
+          prompt: enhancedPrompt,
+          options: generationOptions,
+        }),
       })
 
       if (!response.ok) {
@@ -143,18 +210,34 @@ export default function PromptBuilder() {
     return selectedKeywords.some((kw) => kw.id === optionId)
   }
 
+  // Handle options change from the OptionsSection component
+  const handleOptionsChange = useCallback(
+    (options: {
+      llmModel: string
+      promptTemplate: string
+      imageModel: string
+    }) => {
+      setGenerationOptions(options)
+    },
+    [],
+  )
+
   return (
     <div className="min-h-screen bg-gemini-bg text-gemini-text">
-      <div className="container mx-auto py-8 px-4">
-        <div className="flex items-center justify-center gap-2 mb-8">
+      <div className="container mx-auto py-6 px-4">
+        <div className="flex items-center justify-center gap-2 mb-6">
           <Sparkles className="h-6 w-6 text-gemini-blue" />
-          <h1 className="text-3xl font-medium">Gemini Image Creator</h1>
+          <h1 className="text-3xl font-medium">LLM Image Prompt Refiner | Image Generator</h1>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Left panel - Categories and Options */}
-          <div className="lg:col-span-2">
-            <Card className="bg-gemini-card border-gemini-border shadow-gemini mb-6">
+          <div className="lg:col-span-2 space-y-5">
+            {/* Options Section - Always visible on all screen sizes */}
+            <OptionsSection onOptionsChange={handleOptionsChange} />
+
+            {/* Categories and Keywords Section */}
+            <Card className="bg-gemini-card border-gemini-border shadow-gemini">
               <CardHeader className="pb-3">
                 <CardTitle className="text-xl font-medium text-gemini-text">Choose Categories & Keywords</CardTitle>
                 <CardDescription className="text-gemini-text-secondary">
@@ -169,19 +252,44 @@ export default function PromptBuilder() {
                   onValueChange={handleCategoryChange}
                   className="w-full"
                 >
-                  <ScrollArea className="w-full whitespace-nowrap pb-2">
-                    <TabsList className="w-full justify-start bg-gemini-input h-auto p-1">
-                      {primaryCategories.map((category) => (
-                        <TabsTrigger
-                          key={category.id}
-                          value={category.id}
-                          className="rounded-full py-1.5 px-3 data-[state=active]:bg-gemini-blue data-[state=active]:text-black"
-                        >
-                          {category.label}
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
-                  </ScrollArea>
+                  <div className="relative">
+                    {/* Left scroll button */}
+                    {showLeftScroll && (
+                      <button
+                        onClick={() => scrollTabs("left")}
+                        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-gemini-card/80 hover:bg-gemini-hover rounded-full p-1 backdrop-blur-sm"
+                        aria-label="Scroll categories left"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                    )}
+
+                    {/* Scrollable tabs container */}
+                    <div ref={tabsContainerRef} className="w-full overflow-x-auto scrollbar-hide pb-2 px-6">
+                      <TabsList className="w-max justify-start bg-gemini-input h-auto p-1">
+                        {primaryCategories.map((category) => (
+                          <TabsTrigger
+                            key={category.id}
+                            value={category.id}
+                            className="rounded-full py-1.5 px-3 data-[state=active]:bg-gemini-blue data-[state=active]:text-black"
+                          >
+                            {category.label}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </div>
+
+                    {/* Right scroll button */}
+                    {showRightScroll && (
+                      <button
+                        onClick={() => scrollTabs("right")}
+                        className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-gemini-card/80 hover:bg-gemini-hover rounded-full p-1 backdrop-blur-sm"
+                        aria-label="Scroll categories right"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
 
                   {primaryCategories.map((category) => (
                     <TabsContent key={category.id} value={category.id} className="mt-4">
@@ -231,20 +339,21 @@ export default function PromptBuilder() {
                                 </button>
                               ))}
 
-                              {/* Default options */}
-                              {defaultOptions.map((option) => (
-                                <button
-                                  key={option.id}
-                                  onClick={() => handleOptionClick(option)}
-                                  className={`p-3 rounded-xl text-left transition-all ${
-                                    isOptionSelected(option.id)
-                                      ? "bg-gemini-selected border border-gemini-blue/50"
-                                      : "bg-gemini-input border border-transparent hover:bg-gemini-hover"
-                                  }`}
-                                >
-                                  {option.label}
-                                </button>
-                              ))}
+                              {/* Only show default options if we're not in the default category */}
+                              {activeCategory !== "default" &&
+                                defaultOptions.map((option) => (
+                                  <button
+                                    key={option.id}
+                                    onClick={() => handleOptionClick(option)}
+                                    className={`p-3 rounded-xl text-left transition-all ${
+                                      isOptionSelected(option.id)
+                                        ? "bg-gemini-selected border border-gemini-blue/50"
+                                        : "bg-gemini-input border border-transparent hover:bg-gemini-hover"
+                                    }`}
+                                  >
+                                    {option.label}
+                                  </button>
+                                ))}
                             </div>
 
                             <div className="flex gap-2 mt-4">
@@ -371,7 +480,14 @@ export default function PromptBuilder() {
                       priority
                     />
                   </div>
-                  <p className="text-xs text-gemini-text-secondary mt-2 text-center">Prompt: {enhancedPrompt}</p>
+                  <p className="text-xs text-gemini-text-secondary mt-2 text-center">
+                    {generationOptions.imageModel && (
+                      <span className="block mb-1">
+                        Model: {generationOptions.imageModel} | Template: {generationOptions.promptTemplate}
+                      </span>
+                    )}
+                    Prompt: {enhancedPrompt}
+                  </p>
                 </CardFooter>
               )}
             </Card>
