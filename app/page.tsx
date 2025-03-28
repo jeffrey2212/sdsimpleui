@@ -1,24 +1,24 @@
-import PromptBuilder from "@/components/prompt-builder"
+import MultiStepPromptBuilder from "@/components/multi-step-prompt-builder"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "LLM Image Prompt Refiner | Build AI Image Prompts",
-  description: "Build prompts for text-to-image generation with a Easy to use interface",
+  title: "Multi-Step Prompt Builder | Image Description Generator",
+  description: "Build detailed image prompts through a guided step-by-step process",
   openGraph: {
-    title: "LLM Image Prompt Refiner",
-    description: "Build prompts for text-to-image generation with a Easy to use interface",
+    title: "Multi-Step Prompt Builder",
+    description: "Build detailed image prompts through a guided step-by-step process",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Gemini Image Creator",
+        alt: "Multi-Step Prompt Builder",
       },
     ],
   },
 }
 
 export default function Home() {
-  return <PromptBuilder />
+  return <MultiStepPromptBuilder />
 }
 

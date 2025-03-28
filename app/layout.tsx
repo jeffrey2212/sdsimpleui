@@ -6,8 +6,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata = {
-  title: "LLM Image Prompt Refiner | Image Generator",
-  description: "Build prompts for text-to-image generation with a Easy to use interface",
+  title: "Gemini Image Creator",
+  description: "Build prompts for text-to-image generation with a Gemini-inspired interface",
     generator: 'v0.dev'
 }
 

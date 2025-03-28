@@ -9,7 +9,7 @@ import { Loader2, Sparkles, X, RefreshCw, Wand2, Plus, ChevronLeft, ChevronRight
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Image from "next/image"
-import { generateOptionsForCategory } from "@/lib/prompt-utils"
+import { generateOptionsForCategory, enhancePrompt } from "@/lib/prompt-utils"
 import type { CategoryOption, Keyword } from "@/lib/types"
 // Replace the import for OptionsSection
 import OptionsSection from "@/components/options-section-debug"
@@ -26,11 +26,17 @@ const primaryCategories = [
   { id: "time", label: "Time Period", description: "When does the scene take place?" },
 ]
 
+// Default options that appear in every sub-category
+const defaultOptions = [
+  { id: "high-quality", label: "High Quality", category: "default" },
+  { id: "detailed", label: "Detailed", category: "default" },
+]
+
 export default function PromptBuilder() {
   const [activeCategory, setActiveCategory] = useState("subject")
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([])
   const [loading, setLoading] = useState(false)
-  const [selectedKeywords, setSelectedKeywords] = useState<Keyword[]>([])
+  const [selectedKeywords, setSelectedKeywords] = useState<Keyword[]>([...defaultOptions])
   const [customKeyword, setCustomKeyword] = useState("")
   const [enhancedPrompt, setEnhancedPrompt] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
@@ -40,7 +46,6 @@ export default function PromptBuilder() {
     promptTemplate: "illustrious",
     imageModel: "",
   })
-  const [selectedModel, setSelectedModel] = useState("")
 
   // Refs for category tabs scrolling
   const tabsContainerRef = useRef<HTMLDivElement>(null)
@@ -105,51 +110,21 @@ export default function PromptBuilder() {
     const loadOptions = async () => {
       setLoading(true)
       try {
-        // Only use LLM for subject category for now
-        if (activeCategory === "subject") {
-          const response = await fetch("/api/ollama/generate-options", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              category: activeCategory,
-              isReroll: false,
-              model: selectedModel || "llama2", // Pass the selected model
-            }),
-          })
-
-          if (!response.ok) {
-            throw new Error(`Failed to generate options: ${response.status}`)
-          }
-
-          const data = await response.json()
-          setCategoryOptions(data.options)
-        } else {
-          // Use existing generateOptionsForCategory for other categories
-          const options = await generateOptionsForCategory(activeCategory)
-          setCategoryOptions(options)
-        }
-      } catch (error) {
-        console.error("Error loading options:", error)
-        // Fallback to generateOptionsForCategory if LLM fails
         const options = await generateOptionsForCategory(activeCategory)
         setCategoryOptions(options)
+      } catch (error) {
+        console.error("Error loading options:", error)
       } finally {
         setLoading(false)
       }
     }
 
     loadOptions()
-  }, [activeCategory, selectedModel]) // Add selectedModel to dependencies
+  }, [activeCategory])
 
   // Update enhanced prompt whenever selected keywords change
   useEffect(() => {
-    if (selectedKeywords.length === 0) {
-      setEnhancedPrompt("")
-      return
-    }
-
-    const keywordLabels = selectedKeywords.map((kw) => kw.label)
-    setEnhancedPrompt(keywordLabels.join(", "))
+    setEnhancedPrompt(enhancePrompt(selectedKeywords))
   }, [selectedKeywords])
 
   const handleCategoryChange = (category: string) => {
@@ -170,6 +145,9 @@ export default function PromptBuilder() {
   }
 
   const handleRemoveKeyword = (keywordId: string) => {
+    // Don't allow removing default options
+    if (defaultOptions.some((opt) => opt.id === keywordId)) return
+
     setSelectedKeywords(selectedKeywords.filter((kw) => kw.id !== keywordId))
   }
 
@@ -188,35 +166,12 @@ export default function PromptBuilder() {
 
   const handleRerollOptions = async () => {
     setLoading(true)
+
     try {
-      if (activeCategory === "subject") {
-        const response = await fetch("/api/ollama/generate-options", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            category: activeCategory,
-            previousOptions: categoryOptions.map(opt => opt.label),
-            isReroll: true,
-            model: selectedModel || "llama2",
-          }),
-        })
-
-        if (!response.ok) {
-          throw new Error(`Failed to generate options: ${response.status}`)
-        }
-
-        const data = await response.json()
-        setCategoryOptions(data.options)
-      } else {
-        // Use existing generateOptionsForCategory for other categories
-        const options = await generateOptionsForCategory(activeCategory, true)
-        setCategoryOptions(options)
-      }
-    } catch (error) {
-      console.error("Error rerolling options:", error)
-      // Fallback to generateOptionsForCategory if LLM fails
       const options = await generateOptionsForCategory(activeCategory, true)
       setCategoryOptions(options)
+    } catch (error) {
+      console.error("Error rerolling options:", error)
     } finally {
       setLoading(false)
     }
@@ -263,7 +218,6 @@ export default function PromptBuilder() {
       imageModel: string
     }) => {
       setGenerationOptions(options)
-      setSelectedModel(options.llmModel)
     },
     [],
   )
@@ -273,7 +227,7 @@ export default function PromptBuilder() {
       <div className="container mx-auto py-6 px-4">
         <div className="flex items-center justify-center gap-2 mb-6">
           <Sparkles className="h-6 w-6 text-gemini-blue" />
-          <h1 className="text-3xl font-medium">LLM Image Prompt Refiner | Image Generator</h1>
+          <h1 className="text-3xl font-medium">Gemini Image Creator</h1>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -384,6 +338,22 @@ export default function PromptBuilder() {
                                   {option.label}
                                 </button>
                               ))}
+
+                              {/* Only show default options if we're not in the default category */}
+                              {activeCategory !== "default" &&
+                                defaultOptions.map((option) => (
+                                  <button
+                                    key={option.id}
+                                    onClick={() => handleOptionClick(option)}
+                                    className={`p-3 rounded-xl text-left transition-all ${
+                                      isOptionSelected(option.id)
+                                        ? "bg-gemini-selected border border-gemini-blue/50"
+                                        : "bg-gemini-input border border-transparent hover:bg-gemini-hover"
+                                    }`}
+                                  >
+                                    {option.label}
+                                  </button>
+                                ))}
                             </div>
 
                             <div className="flex gap-2 mt-4">
@@ -456,12 +426,16 @@ export default function PromptBuilder() {
                       <Badge
                         key={keyword.id}
                         variant="gemini"
-                        className={`px-3 py-1.5 flex items-center gap-1`}
+                        className={`px-3 py-1.5 flex items-center gap-1 ${
+                          keyword.category === "default" ? "bg-gemini-blue/20" : ""
+                        }`}
                       >
                         {keyword.label}
                         <button
                           onClick={() => handleRemoveKeyword(keyword.id)}
-                          className={`ml-1 rounded-full hover:bg-gemini-hover p-0.5`}
+                          className={`ml-1 rounded-full hover:bg-gemini-hover p-0.5 ${
+                            keyword.category === "default" ? "invisible" : ""
+                          }`}
                           aria-label={`Remove ${keyword.label}`}
                         >
                           <X className="h-3 w-3" />
@@ -523,3 +497,4 @@ export default function PromptBuilder() {
     </div>
   )
 }
+
