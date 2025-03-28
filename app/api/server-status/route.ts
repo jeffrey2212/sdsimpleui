@@ -7,8 +7,14 @@ export async function GET() {
     // Simulate checking server status
     // In a real implementation, you would check if your servers are running
 
-    // For demo purposes, we'll return random status
-    const llmServerStatus = Math.random() > 0.2 ? "online" : "offline"
+    const ollamaUrl = process.env.OLLAMA_URL
+    if (!ollamaUrl) {
+      throw new Error("OLLAMA_URL is not set")
+    }
+
+    const ollamaUrlStatusResponse = await fetch(ollamaUrl)
+    const llmServerStatus = ollamaUrlStatusResponse.ok ? "online" : "offline"
+    // const llmServerStatus = Math.random() > 0.2 ? "online" : "offline"
     const comfyServerStatus = Math.random() > 0.3 ? "online" : "offline"
 
     return NextResponse.json({
