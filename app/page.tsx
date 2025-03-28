@@ -1,103 +1,534 @@
-import Image from "next/image";
+"use client"
 
-export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Separator } from "@/components/ui/separator"
+import { Loader2, Sparkles, X, RefreshCw, Wand2, Plus } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+// Primary categories
+const primaryCategories = [
+  { id: "subject", label: "Subject", description: "What is the main focus of your image?" },
+  { id: "style", label: "Style", description: "What artistic style should the image have?" },
+  { id: "lighting", label: "Lighting", description: "How should the scene be lit?" },
+  { id: "composition", label: "Composition", description: "How should elements be arranged?" },
+  { id: "mood", label: "Mood", description: "What feeling or atmosphere should the image convey?" },
+  { id: "color", label: "Color", description: "What color palette should be used?" },
+  { id: "setting", label: "Setting", description: "Where does the scene take place?" },
+  { id: "time", label: "Time Period", description: "When does the scene take place?" },
+]
+
+// Default options that appear in every sub-category
+const defaultOptions = [
+  { id: "high-quality", label: "High Quality", category: "default" },
+  { id: "detailed", label: "Detailed", category: "default" },
+]
+
+// Placeholder for LLM-generated options based on selected category
+const generateOptionsForCategory = async (category) => {
+  // In a real implementation, this would call an LLM API
+  // Simulate API call delay
+  await new Promise((resolve) => setTimeout(resolve, 800))
+
+  // Return predefined options based on the category
+  switch (category) {
+    case "subject":
+      return [
+        { id: "portrait", label: "Portrait", category: "subject" },
+        { id: "landscape", label: "Landscape", category: "subject" },
+        { id: "animal", label: "Animal", category: "subject" },
+        { id: "cityscape", label: "Cityscape", category: "subject" },
+        { id: "still-life", label: "Still Life", category: "subject" },
+        { id: "abstract", label: "Abstract", category: "subject" },
+      ]
+    case "style":
+      return [
+        { id: "photorealistic", label: "Photorealistic", category: "style" },
+        { id: "oil-painting", label: "Oil Painting", category: "style" },
+        { id: "watercolor", label: "Watercolor", category: "style" },
+        { id: "digital-art", label: "Digital Art", category: "style" },
+        { id: "pixel-art", label: "Pixel Art", category: "style" },
+        { id: "3d-render", label: "3D Render", category: "style" },
+      ]
+    case "lighting":
+      return [
+        { id: "natural", label: "Natural Light", category: "lighting" },
+        { id: "golden-hour", label: "Golden Hour", category: "lighting" },
+        { id: "dramatic", label: "Dramatic", category: "lighting" },
+        { id: "soft", label: "Soft", category: "lighting" },
+        { id: "neon", label: "Neon", category: "lighting" },
+        { id: "backlit", label: "Backlit", category: "lighting" },
+      ]
+    case "composition":
+      return [
+        { id: "symmetrical", label: "Symmetrical", category: "composition" },
+        { id: "rule-of-thirds", label: "Rule of Thirds", category: "composition" },
+        { id: "minimalist", label: "Minimalist", category: "composition" },
+        { id: "dynamic", label: "Dynamic", category: "composition" },
+        { id: "close-up", label: "Close-up", category: "composition" },
+        { id: "wide-angle", label: "Wide Angle", category: "composition" },
+      ]
+    case "mood":
+      return [
+        { id: "peaceful", label: "Peaceful", category: "mood" },
+        { id: "mysterious", label: "Mysterious", category: "mood" },
+        { id: "joyful", label: "Joyful", category: "mood" },
+        { id: "melancholic", label: "Melancholic", category: "mood" },
+        { id: "energetic", label: "Energetic", category: "mood" },
+        { id: "ethereal", label: "Ethereal", category: "mood" },
+      ]
+    case "color":
+      return [
+        { id: "vibrant", label: "Vibrant", category: "color" },
+        { id: "monochromatic", label: "Monochromatic", category: "color" },
+        { id: "pastel", label: "Pastel", category: "color" },
+        { id: "dark", label: "Dark", category: "color" },
+        { id: "warm", label: "Warm", category: "color" },
+        { id: "cool", label: "Cool", category: "color" },
+      ]
+    case "setting":
+      return [
+        { id: "urban", label: "Urban", category: "setting" },
+        { id: "nature", label: "Nature", category: "setting" },
+        { id: "fantasy", label: "Fantasy", category: "setting" },
+        { id: "futuristic", label: "Futuristic", category: "setting" },
+        { id: "indoor", label: "Indoor", category: "setting" },
+        { id: "underwater", label: "Underwater", category: "setting" },
+      ]
+    case "time":
+      return [
+        { id: "modern", label: "Modern", category: "time" },
+        { id: "vintage", label: "Vintage", category: "time" },
+        { id: "medieval", label: "Medieval", category: "time" },
+        { id: "ancient", label: "Ancient", category: "time" },
+        { id: "futuristic", label: "Futuristic", category: "time" },
+        { id: "timeless", label: "Timeless", category: "time" },
+      ]
+    default:
+      return []
+  }
 }
+
+// Function to enhance the prompt with context and style suggestions
+const enhancePrompt = (keywords) => {
+  if (!keywords.length) return ""
+
+  // Group keywords by category
+  const groupedKeywords = keywords.reduce((acc, keyword) => {
+    if (!acc[keyword.category]) {
+      acc[keyword.category] = []
+    }
+    acc[keyword.category].push(keyword.label)
+    return acc
+  }, {})
+
+  // Build the prompt with natural language structure
+  const promptParts = []
+
+  // Add subject first (if available)
+  if (groupedKeywords.subject && groupedKeywords.subject.length > 0) {
+    promptParts.push(groupedKeywords.subject.join(" and "))
+  }
+
+  // Add setting (if available)
+  if (groupedKeywords.setting && groupedKeywords.setting.length > 0) {
+    promptParts.push(`in ${groupedKeywords.setting.join(" and ")}`)
+  }
+
+  // Add time period (if available)
+  if (groupedKeywords.time && groupedKeywords.time.length > 0) {
+    promptParts.push(`from ${groupedKeywords.time.join(" and ")} era`)
+  }
+
+  // Add mood (if available)
+  if (groupedKeywords.mood && groupedKeywords.mood.length > 0) {
+    promptParts.push(`with a ${groupedKeywords.mood.join(" and ")} atmosphere`)
+  }
+
+  // Add lighting (if available)
+  if (groupedKeywords.lighting && groupedKeywords.lighting.length > 0) {
+    promptParts.push(`with ${groupedKeywords.lighting.join(" and ")} lighting`)
+  }
+
+  // Add composition (if available)
+  if (groupedKeywords.composition && groupedKeywords.composition.length > 0) {
+    promptParts.push(`using ${groupedKeywords.composition.join(" and ")} composition`)
+  }
+
+  // Add color (if available)
+  if (groupedKeywords.color && groupedKeywords.color.length > 0) {
+    promptParts.push(`in ${groupedKeywords.color.join(" and ")} colors`)
+  }
+
+  // Add style (if available)
+  if (groupedKeywords.style && groupedKeywords.style.length > 0) {
+    promptParts.push(`in the style of ${groupedKeywords.style.join(" and ")}`)
+  }
+
+  // Add custom keywords (if available)
+  if (groupedKeywords.custom && groupedKeywords.custom.length > 0) {
+    promptParts.push(groupedKeywords.custom.join(", "))
+  }
+
+  // Add default quality enhancers (if available)
+  if (groupedKeywords.default && groupedKeywords.default.length > 0) {
+    promptParts.push(groupedKeywords.default.join(", "))
+  } else {
+    // Add some default quality enhancers if none were selected
+    promptParts.push("high quality, detailed")
+  }
+
+  // Add a final quality enhancer
+  promptParts.push("8k resolution")
+
+  // Join everything into a coherent prompt
+  return promptParts.join(", ")
+}
+
+export default function PromptBuilder() {
+  const [activeCategory, setActiveCategory] = useState("subject")
+  const [categoryOptions, setCategoryOptions] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [selectedKeywords, setSelectedKeywords] = useState([...defaultOptions])
+  const [customKeyword, setCustomKeyword] = useState("")
+  const [enhancedPrompt, setEnhancedPrompt] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generatedImage, setGeneratedImage] = useState("")
+
+  // Load options when category changes
+  useEffect(() => {
+    const loadOptions = async () => {
+      setLoading(true)
+      try {
+        const options = await generateOptionsForCategory(activeCategory)
+        setCategoryOptions(options)
+      } catch (error) {
+        console.error("Error loading options:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadOptions()
+  }, [activeCategory])
+
+  // Update enhanced prompt whenever selected keywords change
+  useEffect(() => {
+    setEnhancedPrompt(enhancePrompt(selectedKeywords))
+  }, [selectedKeywords])
+
+  const handleCategoryChange = (category) => {
+    setActiveCategory(category)
+  }
+
+  const handleOptionClick = (option) => {
+    // Check if the option is already selected
+    const isSelected = selectedKeywords.some((kw) => kw.id === option.id)
+
+    if (isSelected) {
+      // Remove the option if already selected
+      setSelectedKeywords(selectedKeywords.filter((kw) => kw.id !== option.id))
+    } else {
+      // Add the option if not already selected
+      setSelectedKeywords([...selectedKeywords, option])
+    }
+  }
+
+  const handleRemoveKeyword = (keywordId) => {
+    // Don't allow removing default options
+    if (defaultOptions.some((opt) => opt.id === keywordId)) return
+
+    setSelectedKeywords(selectedKeywords.filter((kw) => kw.id !== keywordId))
+  }
+
+  const handleAddCustomKeyword = () => {
+    if (!customKeyword.trim()) return
+
+    const newKeyword = {
+      id: `custom-${Date.now()}`,
+      label: customKeyword.trim(),
+      category: "custom",
+    }
+
+    setSelectedKeywords([...selectedKeywords, newKeyword])
+    setCustomKeyword("")
+  }
+
+  const handleRerollOptions = async () => {
+    setLoading(true)
+
+    // In a real implementation, you would call the LLM API again with a different seed
+    // For now, we'll just wait a bit and return the same options
+    await new Promise((resolve) => setTimeout(resolve, 800))
+
+    // Simulate getting new options by shuffling the existing ones
+    const shuffledOptions = [...categoryOptions].sort(() => Math.random() - 0.5)
+    setCategoryOptions(shuffledOptions)
+
+    setLoading(false)
+  }
+
+  const handleGenerateImage = async () => {
+    setIsGenerating(true)
+
+    try {
+      // In a real implementation, you would call your API here
+      // const response = await fetch('/api/generate-image', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ prompt: enhancedPrompt })
+      // });
+      // const data = await response.json();
+      // setGeneratedImage(data.imageUrl);
+
+      // Simulate API call for demonstration
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+      setGeneratedImage("/placeholder.svg?height=512&width=512")
+    } catch (error) {
+      console.error("Error generating image:", error)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  // Check if an option is selected
+  const isOptionSelected = (optionId) => {
+    return selectedKeywords.some((kw) => kw.id === optionId)
+  }
+
+  return (
+    <div className="min-h-screen bg-gemini-bg text-gemini-text">
+      <div className="container mx-auto py-8 px-4">
+        <div className="flex items-center justify-center gap-2 mb-8">
+          <Sparkles className="h-6 w-6 text-gemini-blue" />
+          <h1 className="text-3xl font-medium">Gemini Image Creator</h1>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left panel - Categories and Options */}
+          <div className="lg:col-span-2">
+            <Card className="bg-gemini-card border-gemini-border shadow-gemini mb-6">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-xl font-medium text-gemini-text">Choose Categories & Keywords</CardTitle>
+                <CardDescription className="text-gemini-text-secondary">
+                  Select from the categories below to build your prompt
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent>
+                <Tabs
+                  defaultValue="subject"
+                  value={activeCategory}
+                  onValueChange={handleCategoryChange}
+                  className="w-full"
+                >
+                  <ScrollArea className="w-full whitespace-nowrap pb-2">
+                    <TabsList className="w-full justify-start bg-gemini-input h-auto p-1">
+                      {primaryCategories.map((category) => (
+                        <TabsTrigger
+                          key={category.id}
+                          value={category.id}
+                          className="rounded-full py-1.5 px-3 data-[state=active]:bg-gemini-blue data-[state=active]:text-black"
+                        >
+                          {category.label}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </ScrollArea>
+
+                  {primaryCategories.map((category) => (
+                    <TabsContent key={category.id} value={category.id} className="mt-4">
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <h3 className="text-sm font-medium text-gemini-text-secondary">{category.description}</h3>
+                          <Button
+                            variant="gemini-outline"
+                            size="sm"
+                            onClick={handleRerollOptions}
+                            disabled={loading}
+                            className="rounded-full"
+                          >
+                            {loading ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                            ) : (
+                              <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                            )}
+                            Reroll
+                          </Button>
+                        </div>
+
+                        {loading ? (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 min-h-[200px] place-content-center">
+                            <div className="col-span-full flex justify-center">
+                              <div className="relative">
+                                <div className="absolute inset-0 rounded-full bg-gemini-blue/20 blur-xl animate-pulse"></div>
+                                <Loader2 className="h-8 w-8 animate-spin text-gemini-blue relative z-10" />
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {/* Dynamic options */}
+                              {categoryOptions.map((option) => (
+                                <button
+                                  key={option.id}
+                                  onClick={() => handleOptionClick(option)}
+                                  className={`p-3 rounded-xl text-left transition-all ${
+                                    isOptionSelected(option.id)
+                                      ? "bg-gemini-selected border border-gemini-blue/50"
+                                      : "bg-gemini-input border border-transparent hover:bg-gemini-hover"
+                                  }`}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+
+                              {/* Default options */}
+                              {defaultOptions.map((option) => (
+                                <button
+                                  key={option.id}
+                                  onClick={() => handleOptionClick(option)}
+                                  className={`p-3 rounded-xl text-left transition-all ${
+                                    isOptionSelected(option.id)
+                                      ? "bg-gemini-selected border border-gemini-blue/50"
+                                      : "bg-gemini-input border border-transparent hover:bg-gemini-hover"
+                                  }`}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+
+                            <div className="flex gap-2 mt-4">
+                              <Input
+                                placeholder="Add custom keyword..."
+                                value={customKeyword}
+                                onChange={(e) => setCustomKeyword(e.target.value)}
+                                className="bg-gemini-input border-gemini-border rounded-xl"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleAddCustomKeyword()
+                                  }
+                                }}
+                              />
+                              <Button
+                                variant="gemini-outline"
+                                onClick={handleAddCustomKeyword}
+                                disabled={!customKeyword.trim()}
+                                className="rounded-xl"
+                              >
+                                <Plus className="h-4 w-4 mr-1" />
+                                Add
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            {/* Enhanced prompt preview */}
+            {enhancedPrompt && (
+              <Card className="bg-gemini-card border-gemini-border shadow-gemini">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-xl font-medium text-gemini-text">Prompt Preview</CardTitle>
+                  <CardDescription className="text-gemini-text-secondary">
+                    Your prompt will be enhanced with additional context
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="p-4 bg-gemini-input rounded-2xl">
+                    <p className="text-sm text-gemini-text">{enhancedPrompt}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Right panel - Selected Keywords and Generation */}
+          <div className="lg:col-span-1">
+            <Card className="bg-gemini-card border-gemini-border shadow-gemini mb-6 sticky top-4">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-xl font-medium text-gemini-text">Selected Keywords</CardTitle>
+                <CardDescription className="text-gemini-text-secondary">
+                  {selectedKeywords.length} keywords selected
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent>
+                <div className="flex flex-wrap gap-2 min-h-[100px]">
+                  {selectedKeywords.length === 0 ? (
+                    <p className="text-gemini-text-secondary text-sm">
+                      No keywords selected. Click on options to add them.
+                    </p>
+                  ) : (
+                    selectedKeywords.map((keyword) => (
+                      <Badge
+                        key={keyword.id}
+                        variant="gemini"
+                        className={`px-3 py-1.5 flex items-center gap-1 ${
+                          keyword.category === "default" ? "bg-gemini-blue/20" : ""
+                        }`}
+                      >
+                        {keyword.label}
+                        <button
+                          onClick={() => handleRemoveKeyword(keyword.id)}
+                          className={`ml-1 rounded-full hover:bg-gemini-hover p-0.5 ${
+                            keyword.category === "default" ? "invisible" : ""
+                          }`}
+                          aria-label={`Remove ${keyword.label}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))
+                  )}
+                </div>
+
+                <Separator className="my-4 bg-gemini-border" />
+
+                <Button
+                  variant="gemini"
+                  onClick={handleGenerateImage}
+                  disabled={selectedKeywords.length === 0 || isGenerating}
+                  className="w-full rounded-xl"
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="mr-2 h-4 w-4" />
+                      Generate Image
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+
+              {generatedImage && (
+                <CardFooter className="flex-col items-center pt-0">
+                  <h3 className="text-sm font-medium mb-2 self-start text-gemini-text-secondary">Generated Image:</h3>
+                  <div className="rounded-2xl overflow-hidden border border-gemini-border">
+                    <img src={generatedImage || "/placeholder.svg"} alt="Generated from prompt" className="w-full" />
+                  </div>
+                  <p className="text-xs text-gemini-text-secondary mt-2 text-center">Prompt: {enhancedPrompt}</p>
+                </CardFooter>
+              )}
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
