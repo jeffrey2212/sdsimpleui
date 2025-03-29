@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { OLLAMA_PROMPTS } from "@/lib/prompts"
 
 interface GenerateOptionsRequest {
   step: string
@@ -11,6 +12,7 @@ interface GenerateOptionsRequest {
     }
   >
   reroll?: boolean
+  model?: string
 }
 
 interface StepOption {
@@ -19,28 +21,117 @@ interface StepOption {
   description: string
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const { step, selections, reroll = false }: GenerateOptionsRequest = await request.json()
+interface GeneratedOption {
+  id: string
+  label: string
+  description: string
+}
 
-    if (!step) {
-      return NextResponse.json({ error: "Step is required" }, { status: 400 })
+async function generateOptionsWithOllama(
+  step: string,
+  selections: Record<string, StepOption>,
+  model: string,
+  reroll = false
+): Promise<StepOption[]> {
+  try {
+    const context = Object.entries(selections)
+      .map(([step, selection]) => `${step}: ${selection.label}`)
+      .join(", ");
+
+    const prompt = OLLAMA_PROMPTS.generateOptionsPrompt(step, context);
+
+    console.log("=== Generating options with Ollama ===");
+    console.log("Step:", step);
+    console.log("Context:", context);
+    console.log("Model:", model);
+    console.log("Reroll:", reroll);
+    console.log("Prompt:", prompt);
+
+    const response = await fetch(`${process.env.OLLAMA_URL}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        prompt,
+        system: OLLAMA_PROMPTS.SYSTEM_PROMPT,
+        stream: false
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to generate options with Ollama");
     }
 
-    // In a real implementation, you would use an LLM or other AI system to generate
-    // contextually relevant options based on the current step and previous selections
+    const data = await response.json();
+    console.log("Raw Ollama response:", JSON.stringify(data, null, 2));
+    console.log("Response text:", data.response);
+    
+    try {
+      // More aggressive cleanup of the response
+      let cleanResponse = data.response
+        .replace(/```json\n?/g, "") // Remove ```json with or without newline
+        .replace(/```\n?/g, "")     // Remove ``` with or without newline
+        .replace(/\n/g, "")         // Remove all newlines
+        .trim();
+      
+      // If the response starts with a single quote or backtick, try to find matching end and extract content
+      if (cleanResponse.startsWith("'") || cleanResponse.startsWith("`")) {
+        const match = cleanResponse.match(/^['`](.*?)['`]$/);
+        if (match) {
+          cleanResponse = match[1];
+        }
+      }
 
-    // For demo purposes, we'll return mock data
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 800))
+      console.log("Cleaned response:", cleanResponse);
+      
+      let parsedResponse;
+      try {
+        parsedResponse = JSON.parse(cleanResponse);
+      } catch (parseError) {
+        console.error("First parse attempt failed:", parseError);
+        // Try wrapping in an options object if it's just an array
+        if (cleanResponse.startsWith("[") && cleanResponse.endsWith("]")) {
+          try {
+            const parsedArray = JSON.parse(cleanResponse);
+            parsedResponse = { options: parsedArray };
+          } catch (arrayError) {
+            console.error("Array parse attempt failed:", arrayError);
+            throw parseError; // Throw the original error if both attempts fail
+          }
+        } else {
+          throw parseError;
+        }
+      }
 
-    // Generate options based on the step and previous selections
-    const options = generateMockOptions(step, selections, reroll)
+      if (!parsedResponse.options || !Array.isArray(parsedResponse.options)) {
+        console.error("Invalid response structure:", parsedResponse);
+        throw new Error("Response missing options array");
+      }
 
-    return NextResponse.json({ options })
+      // Validate each option has the required fields
+      const validOptions = parsedResponse.options.every((option: unknown) => 
+        typeof option === 'object' &&
+        option !== null &&
+        typeof (option as StepOption).id === 'string' &&
+        typeof (option as StepOption).label === 'string' &&
+        typeof (option as StepOption).description === 'string'
+      );
+
+      if (!validOptions) {
+        console.error("Invalid option structure in response:", parsedResponse.options);
+        throw new Error("Invalid option structure in response");
+      }
+
+      console.log("Final parsed options:", parsedResponse.options);
+      return parsedResponse.options;
+    } catch (e) {
+      console.error("Failed to parse Ollama response:", e);
+      throw new Error("Invalid response format from Ollama");
+    }
   } catch (error) {
-    console.error("Error generating options:", error)
-    return NextResponse.json({ error: "Failed to generate options" }, { status: 500 })
+    console.error("Error generating options with Ollama:", error);
+    // Fallback to mock options if Ollama fails
+    return generateMockOptions(step, selections, reroll);
   }
 }
 
@@ -171,3 +262,24 @@ function generateMockOptions(step: string, selections: Record<string, StepOption
   return options.slice(0, 6)
 }
 
+export async function POST(request: NextRequest) {
+  try {
+    const { step, selections, reroll = false, model }: GenerateOptionsRequest & { model: string } = await request.json()
+
+    if (!step) {
+      return NextResponse.json({ error: "Step is required" }, { status: 400 })
+    }
+
+    if (!model) {
+      return NextResponse.json({ error: "Model is required" }, { status: 400 })
+    }
+
+    // Generate options using Ollama with fallback to mock data
+    const options = await generateOptionsWithOllama(step, selections, model, reroll)
+
+    return NextResponse.json({ options })
+  } catch (error) {
+    console.error("Error generating options:", error)
+    return NextResponse.json({ error: "Failed to generate options" }, { status: 500 })
+  }
+}

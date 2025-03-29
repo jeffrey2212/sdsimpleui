@@ -7,18 +7,8 @@ import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Loader2, Settings, Check, AlertCircle } from "lucide-react"
-
-export interface GenerationOptions {
-  llmModel: string
-  promptTemplate: string
-  imageModel: string
-}
-
-const defaultOptions: GenerationOptions = {
-  llmModel: "gemma3:latest",
-  promptTemplate: "illustrious",
-  imageModel: "sdxl"
-}
+import type { GenerationOptions } from "@/types/generation"
+import { defaultOptions } from "@/types/generation"
 
 interface GenerationOptionsProps {
   onOptionsChange: (options: GenerationOptions) => void

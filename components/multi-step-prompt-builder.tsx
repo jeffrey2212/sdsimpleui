@@ -7,10 +7,12 @@ import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, Sparkles, RefreshCw, ArrowLeft, ArrowRight, Check, Wand2, Edit, Zap } from "lucide-react"
+import { Loader2, Sparkles, ArrowLeft, ArrowRight, Check, Wand2, Edit, Zap, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import Image from "next/image"
-import GenerationOptions, { GenerationOptions as GenerationOptionsType } from "./generation-options"
+import type { GenerationOptions } from "@/types/generation"
+import { defaultOptions } from "@/types/generation"
+import GenerationOptionsComponent from "./generation-options"
 
 // Define the steps in our prompt building process
 const STEPS = [
@@ -43,11 +45,7 @@ export default function MultiStepPromptBuilder() {
   const [error, setError] = useState<string | null>(null)
   const [isComplete, setIsComplete] = useState(false)
   const [activePromptTab, setActivePromptTab] = useState("original")
-  const [generationOptions, setGenerationOptions] = useState({
-    llmModel: "deepseek-r1:1.5b",
-    promptTemplate: "illustrious",
-    imageModel: "sdxl",
-  })
+  const [generationOptions, setGenerationOptions] = useState<GenerationOptions>(defaultOptions)
 
   const currentStep = STEPS[currentStepIndex]
   const progress = ((currentStepIndex + 1) / STEPS.length) * 100
@@ -65,6 +63,7 @@ export default function MultiStepPromptBuilder() {
           step: currentStep.id,
           selections,
           reroll,
+          model: generationOptions.llmModel,
         }),
       })
 
@@ -241,7 +240,7 @@ export default function MultiStepPromptBuilder() {
   }
 
   // Handle options change from the GenerationOptions component
-  const handleOptionsChange = useCallback((options: GenerationOptionsType) => {
+  const handleOptionsChange = useCallback((options: GenerationOptions) => {
     setGenerationOptions(options)
   }, [])
 
@@ -257,6 +256,75 @@ export default function MultiStepPromptBuilder() {
     setEditedAssembledPrompt(prompt) // Initialize edited prompt with assembled prompt
   }, [selections])
 
+  const handleStartOver = () => {
+    setCurrentStepIndex(0);
+    setSelections({});
+    setOptions([]);
+    setAssembledPrompt("");
+    setEditedAssembledPrompt("");
+    setEnhancedPrompt("");
+    setGeneratedImage("");
+    setError(null);
+    setIsComplete(false);
+    setActivePromptTab("original");
+  };
+
+  const handleStepClick = async (stepIndex: number) => {
+    // Don't do anything if clicking the current step
+    if (stepIndex === currentStepIndex) return;
+
+    setCurrentStepIndex(stepIndex);
+    
+    // If we already have selections for this step and nothing has changed,
+    // just load the existing options without calling the LLM
+    const stepId = STEPS[stepIndex].id;
+    if (selections[stepId]) {
+      // Find the options that include the selected option
+      const existingOptions = await generateOptionsWithExisting(stepId, selections[stepId]);
+      setOptions(existingOptions);
+    } else {
+      // If we don't have selections for this step, generate new options
+      generateOptions();
+    }
+  };
+
+  // Helper function to generate options including the existing selection
+  const generateOptionsWithExisting = async (stepId: string, existingSelection: StepOption) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/generate-options", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          step: stepId,
+          selections,
+          model: generationOptions.llmModel,
+          existingSelection: existingSelection // Pass the existing selection to ensure it's included
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to generate options: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Make sure the existing selection is included in the options
+      const optionsWithExisting = data.options.filter((opt: StepOption) => opt.id !== existingSelection.id);
+      optionsWithExisting.unshift(existingSelection);
+      
+      return optionsWithExisting.slice(0, 6); // Keep only 6 options
+    } catch (error) {
+      console.error("Error generating options:", error);
+      setError(error instanceof Error ? error.message : "An error occurred");
+      return [existingSelection]; // Return at least the existing selection
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gemini-bg text-gemini-text">
       <div className="container mx-auto py-6 px-4">
@@ -269,7 +337,10 @@ export default function MultiStepPromptBuilder() {
           {/* Left panel - Step progress and options */}
           <div className="lg:col-span-2 space-y-5">
             {/* Generation Options Section */}
-            <GenerationOptions onOptionsChange={handleOptionsChange} />
+            <GenerationOptionsComponent
+              onOptionsChange={handleOptionsChange}
+              selectedOptions={generationOptions}
+            />
 
             {/* Progress indicator */}
             <Card className="bg-gemini-card border-gemini-border shadow-gemini">
@@ -323,21 +394,26 @@ export default function MultiStepPromptBuilder() {
                 <>
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-center">
-                      <CardTitle className="text-xl font-medium text-gemini-text">Choose an option</CardTitle>
-                      <Button
-                        variant="gemini-outline"
-                        size="sm"
-                        onClick={handleReroll}
-                        disabled={loading}
-                        className="rounded-full"
-                      >
-                        {loading ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                        ) : (
-                          <RefreshCw className="h-3.5 w-3.5 mr-1" />
-                        )}
-                        Reroll
-                      </Button>
+                      <h2 className="text-2xl font-bold">Choose an option</h2>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleStartOver}
+                        >
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Start Over
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => generateOptions(true)}
+                          disabled={loading}
+                        >
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Reroll
+                        </Button>
+                      </div>
                     </div>
                     <CardDescription className="text-gemini-text-secondary">
                       Select one option to continue to the next step
@@ -356,7 +432,7 @@ export default function MultiStepPromptBuilder() {
                       <div className="grid place-items-center h-64">
                         <div className="text-center">
                           <p className="text-red-400 mb-4">{error}</p>
-                          <Button variant="gemini-outline" onClick={() => generateOptions()}>
+                          <Button variant="outline" onClick={() => generateOptions()}>
                             Try Again
                           </Button>
                         </div>
@@ -379,7 +455,7 @@ export default function MultiStepPromptBuilder() {
 
                   <CardFooter className="flex justify-between">
                     <Button
-                      variant="gemini-outline"
+                      variant="outline"
                       onClick={handleBack}
                       disabled={currentStepIndex === 0}
                       className="rounded-xl"
@@ -392,7 +468,7 @@ export default function MultiStepPromptBuilder() {
                       {/* Skip to Next Step button */}
                       {currentStepIndex < STEPS.length - 1 && Object.keys(selections).length > 0 && (
                         <Button
-                          variant="gemini-outline"
+                          variant="outline"
                           onClick={() => setCurrentStepIndex(currentStepIndex + 1)}
                           className="rounded-xl"
                         >
@@ -403,7 +479,7 @@ export default function MultiStepPromptBuilder() {
 
                       {/* Skip to End button - only show from step 2 onwards */}
                       {currentStepIndex >= 1 && Object.keys(selections).length > 0 && (
-                        <Button variant="gemini-outline" onClick={() => setIsComplete(true)} className="rounded-xl">
+                        <Button variant="outline" onClick={() => setIsComplete(true)} className="rounded-xl">
                           Skip to End
                           <ArrowRight className="h-4 w-4 ml-2" />
                         </Button>
@@ -420,7 +496,7 @@ export default function MultiStepPromptBuilder() {
                       </CardTitle>
                       <div className="flex gap-2">
                         <Button
-                          variant="gemini-outline"
+                          variant="outline"
                           size="sm"
                           onClick={() => {
                             setIsComplete(false)
@@ -431,7 +507,7 @@ export default function MultiStepPromptBuilder() {
                           <ArrowLeft className="h-3.5 w-3.5 mr-1" />
                           Back to Step 7
                         </Button>
-                        <Button variant="gemini-outline" size="sm" onClick={handleReset} className="rounded-full">
+                        <Button variant="outline" size="sm" onClick={handleReset} className="rounded-full">
                           <RefreshCw className="h-3.5 w-3.5 mr-1" />
                           Start Over
                         </Button>
@@ -473,7 +549,7 @@ export default function MultiStepPromptBuilder() {
                         </div>
 
                         <Button
-                          variant="gemini-outline"
+                          variant="outline"
                           onClick={enhancePrompt}
                           disabled={isEnhancing || !editedAssembledPrompt}
                           className="w-full rounded-xl"
@@ -511,7 +587,7 @@ export default function MultiStepPromptBuilder() {
                             </p>
 
                             <Button
-                              variant="gemini-outline"
+                              variant="outline"
                               onClick={enhancePrompt}
                               disabled={isEnhancing}
                               className="w-full rounded-xl"
@@ -537,7 +613,7 @@ export default function MultiStepPromptBuilder() {
                               Click "Enhance Prompt" on the Original tab to generate an enhanced version.
                             </p>
                             <Button
-                              variant="gemini-outline"
+                              variant="outline"
                               onClick={() => setActivePromptTab("original")}
                               className="rounded-xl"
                             >
@@ -586,24 +662,28 @@ export default function MultiStepPromptBuilder() {
 
               <CardContent>
                 <div className="space-y-3">
-                  {STEPS.map((step) => (
-                    <div key={step.id} className="flex items-start gap-2">
+                  {STEPS.map((step, index) => (
+                    <button
+                      key={step.id}
+                      onClick={() => handleStepClick(index)}
+                      className="flex items-start gap-2 w-full hover:bg-gemini-input/50 p-1 rounded transition-colors text-left"
+                    >
                       <div
                         className={`mt-0.5 w-4 h-4 rounded-full flex items-center justify-center ${
                           selections[step.id] ? "bg-gemini-blue text-black" : "bg-gemini-input"
                         }`}
                       >
-                        {selections[step.id] && <Check className="h-3 w-3" />}
+                        {selections[step.id] && <Check className="w-3 h-3" />}
                       </div>
-                      <div>
-                        <h3 className="text-sm font-medium">{step.label}</h3>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gemini-text">{step.label}</p>
                         {selections[step.id] ? (
-                          <p className="text-sm text-gemini-blue">{selections[step.id].label}</p>
+                          <p className="text-xs text-gemini-text-secondary">{selections[step.id].label}</p>
                         ) : (
                           <p className="text-xs text-gemini-text-secondary italic">Not selected yet</p>
                         )}
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
 

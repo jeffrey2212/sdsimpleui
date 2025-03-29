@@ -3,15 +3,15 @@ import { ollama, type ListResponse } from "@/lib/ollama-client"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("=== Fetching Ollama models ===")
+    //console.log("=== Fetching Ollama models ===")
     
     const response = await ollama.list()
-    console.log("Raw models response:", JSON.stringify(response, null, 2))
+    //console.log("Raw models response:", JSON.stringify(response, null, 2))
 
     // Transform the response to include only model names
     const models = response.models.map(model => model.name)
 
-    console.log("Transformed models for UI:", models)
+    //console.log("Transformed models for UI:", models)
     return NextResponse.json({ models })
 
   } catch (error) {
